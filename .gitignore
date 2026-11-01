@@ -1,0 +1,4 @@
+node_modules/
+teardown-out/
+refs/
+*.mp4
