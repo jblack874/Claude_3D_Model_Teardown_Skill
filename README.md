@@ -1,0 +1,1 @@
+# Claude_3D_Model_Teardown_Skill
