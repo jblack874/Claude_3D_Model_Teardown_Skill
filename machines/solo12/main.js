@@ -2,11 +2,15 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
-import {P, LEGS, CHECK, state} from './kin.js';
+import {P, LEGS, CHECK, GAITS, state as kstate} from './kin.js';
 import {MESH, MESH_META} from './meshes.js';
 
 console.log(`hand check: belt2 = ${CHECK.belt2mm} mm (spec 201), ratio = ${CHECK.ratio}:1 (spec 9)`);
 
+// live drive state (WASD/QE/X, 1-2-3 gaits); film/tour always uses TROT straight ahead
+const drive = {gait: 'TROT', v: 1, side: 0, yaw: 0, x: 0, z: 0, heading: 0, live: false};
+const gaitFor = () => (drive.live ? {...P, ...GAITS[drive.gait], stride: P.stride * drive.v, side: drive.side * 0.2} : P);
+const state = (t) => kstate(t, gaitFor());
 // ---------------------------------------------------------------- page shell
 const css = `
 :root{--bg:#f3f0ea;--ink:#1d1d1f;--mute:#8a857c;--acc:#e8562a;--ok:#2e9d6a;--card:#fbfaf7;--line:#ddd7cc}
@@ -69,7 +73,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <div id="mode"><div class="lab">OPERATING MODE</div><div class="m" id="modeT">TROTTING</div><div class="lab" id="modeS">GAIT PHASE 0.00</div></div>
  <div id="callouts"></div>
 </div>
-<div id="foot"><span>FIELD SIMULATOR · PROCEDURAL MODEL · 4 LEGS · 12 ACTUATORS · 24 BELT STAGES</span><span>BUILT FROM ODRI OPEN HARDWARE (BSD-3) //////</span></div>`);
+<div id="foot"><span>WASD QE MOVE · X STOP · 1 2 3 GAITS · SPACE PAUSE · H HIDE PANELS · DRAG ORBIT</span><span>FIELD SIMULATOR · PROCEDURAL MODEL · 4 LEGS · 12 ACTUATORS · 24 BELT STAGES</span><span>BUILT FROM ODRI OPEN HARDWARE (BSD-3) //////</span></div>`);
 
 // ---------------------------------------------------------------- stage
 const canvas = document.getElementById('c');
@@ -261,7 +265,7 @@ const meshesReady = (async () => {
 const ui = {exploded: 0, explT: 0, xray: false, labels: true, turntable: false, playing: true, t: 0, iso: 'HERO'};
 const VIEWS = {
   HERO: [[0.95, 0.55, 1.2], [0, 0.13, 0]], SIDE: [[0, 0.22, 1.05], [0, 0.15, 0]],
-  TOP: [[0.001, 1.1, 0.001], [0, 0.1, 0]], ACTUATOR: [[0.62, 0.3, 0.75], [P.hipX, 0.14, P.hipY + 0.06]],
+  TOP: [[0.001, 1.1, 0.001], [0, 0.1, 0]], ACTUATOR: [[0.78, 0.36, 0.92], [P.hipX * 0.6, 0.14, P.hipY]],
   BODY: [[0.4, 0.55, 0.35], [0, 0.24, 0]],
 };
 let camFrom = null, camTo = null, camK = 1;
@@ -278,9 +282,13 @@ function btns(el, items) {
   el.innerHTML = items.map(([k, label]) => `<span class="btn" data-k="${k}">${label}</span>`).join('');
   el.querySelectorAll('.btn').forEach((b) => (b.onclick = () => act(b.dataset.k)));
 }
-btns(document.getElementById('asm'), [['HERO', 'HERO'], ['ACTUATOR', 'ACTUATOR'], ['SIDE', 'SIDE'], ['TOP', 'TOP'], ['BODY', 'BODY']]);
+btns(document.getElementById('asm'), [['HERO', 'HERO'], ['ACTUATOR', 'ACTUATOR'], ['SIDE', 'SIDE'], ['TOP', 'TOP'], ['BODY', 'BODY'], ['AUTO', 'AUTO ▶']]);
+document.getElementById('jt').insertAdjacentHTML('beforebegin', '<div id="gaits" style="margin-bottom:6px"></div>');
+btns(document.getElementById('gaits'), [['TROT', '1 TROT'], ['WALK', '2 WALK'], ['BOUND', '3 BOUND']]);
 btns(document.getElementById('disp'), [['labels', 'LABELS'], ['exploded', 'EXPLODED'], ['xray', 'X-RAY'], ['turntable', 'TURNTABLE']]);
 function act(k) {
+  if (k === 'AUTO') { tourOn = true; tourT = 0; drive.live = false; return; }
+  if (GAITS[k]) { drive.gait = k; drive.live = true; document.getElementById('gt').textContent = k; return; }
   if (VIEWS[k]) return view(k);
   if (k === 'exploded') ui.explT = ui.explT ? 0 : 1;
   else ui[k] = !ui[k];
@@ -294,7 +302,7 @@ function sync() {
 }
 document.getElementById('play').onclick = () => ((ui.playing = !ui.playing), sync());
 const scrub = document.getElementById('scrub');
-const LOOP = 20;
+const LOOP = 24;
 scrub.oninput = () => ((ui.t = (scrub.value / 1000) * LOOP), (ui.playing = false), sync());
 document.getElementById('sub').innerHTML = [
   ['01', 'ACTUATOR MODULES', '12 / 12 LIVE'], ['02', 'BELT STAGES', '24 · AT3'], ['03', 'ENCODERS', '5000 CPR'],
@@ -376,8 +384,8 @@ function panels(S) {
   const N = (new URLSearchParams(location.search).has('film') ? 40 : 90), hist = (f) => Array.from({length: N}, (_, i) => f(state(S.t - (N - 1 - i) * (1.08 / N))));
   chart('ch1', [hist((s) => Math.abs(s.legs[0].tauK)), hist((s) => Math.abs(s.legs[0].tauH))], ['#e8562a', '#9a958c'], 0, 2.5);
   chart('ch2', [0, 1, 2, 3].map((k) => hist((s) => s.legs[k].footLift)), ['#e8562a', '#1d1d1f', '#9a958c', '#c9c2b6'], -0.005, P.lift * 1.15);
-  document.getElementById('modeT').textContent = ui.explT ? 'EXPLODED' : ui.xray ? 'X-RAY · DRIVETRAIN' : 'TROTTING';
-  document.getElementById('modeS').textContent = `GAIT PHASE ${S.phase.toFixed(2)} · ${P.freq} HZ · ${fl.stance ? 'FL STANCE' : 'FL SWING'}`;
+  document.getElementById('modeT').textContent = ui.explT ? 'EXPLODED' : ui.xray ? 'X-RAY · DRIVETRAIN' : drive.live ? `${drive.gait === 'TROT' ? 'TROTTING' : drive.gait === 'WALK' ? 'WALKING' : 'BOUNDING'}${drive.v === 0 ? ' · STOPPED' : ''}` : 'TROTTING';
+  document.getElementById('modeS').textContent = `GAIT PHASE ${S.phase.toFixed(2)} · ${drive.live ? GAITS[drive.gait].freq : P.freq} HZ · ${fl.stance ? 'FL STANCE' : 'FL SWING'}`;
   document.getElementById('clock').textContent = `${(S.t % LOOP).toFixed(1)} / ${LOOP}.0 S`;
   scrub.value = ((S.t % LOOP) / LOOP) * 1000;
 }
@@ -400,6 +408,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (FILM) return; // capture drives frames
   if (tourOn) { tourT += dt; renderAt(tourT); requestAnimationFrame(frame); return; }
+  steer(dt);
   if (ui.playing) ui.t += dt;
   ui.exploded += (ui.explT - ui.exploded) * Math.min(1, dt * 4);
   if (camK < 1) { camK = Math.min(1, camK + dt / 1.2); const k = ease(camK); cam.position.lerpVectors(camFrom[0], camTo[0], k); ctl.target.lerpVectors(camFrom[1], camTo[1], k); }
@@ -448,8 +457,29 @@ function applyScript(t) {
 }
 // tour: idle → script plays; any input → visitor; 25 s quiet → tour returns
 let tourOn = true, idleAt = 0, tourT = 0;
-const takeover = () => { tourOn = false; idleAt = performance.now(); cursor.style.display = 'none'; camK = 1; };
+const takeover = () => { tourOn = false; drive.live = true; idleAt = performance.now(); cursor.style.display = 'none'; camK = 1; };
 ['pointerdown', 'wheel', 'keydown'].forEach((ev) => addEventListener(ev, (e) => { if (e.isTrusted) takeover(); }, {capture: true}));
+const held = new Set();
+addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase(); held.add(k);
+  if (k === ' ') { ui.playing = !ui.playing; sync(); e.preventDefault(); }
+  if (k === 'x') { drive.v = 0; drive.side = 0; drive.live = true; }
+  if (k === '1' || k === '2' || k === '3') act(['TROT', 'WALK', 'BOUND'][+k - 1]);
+});
+function steer(dt) {
+  if (!drive.live) return;
+  if (held.has('w')) drive.v = Math.min(1.5, drive.v + dt * 1.5);
+  if (held.has('s')) drive.v = Math.max(-1, drive.v - dt * 1.5);
+  drive.side = held.has('a') ? 1 : held.has('d') ? -1 : 0;
+  if (held.has('q')) drive.heading += dt * 0.9;
+  if (held.has('e')) drive.heading -= dt * 0.9;
+  const sp = GAITS[drive.gait].freq * P.stride * drive.v;
+  drive.x += Math.cos(drive.heading) * sp * dt; drive.z -= Math.sin(drive.heading) * sp * dt;
+  drive.x -= Math.sin(drive.heading) * drive.side * 0.05 * dt; drive.z -= Math.cos(drive.heading) * drive.side * 0.05 * dt;
+  robot.position.set(drive.x, 0, drive.z); robot.rotation.y = drive.heading;
+  ctl.target.x += (drive.x - ctl.target.x) * Math.min(1, dt * 2); ctl.target.z += (drive.z - ctl.target.z) * Math.min(1, dt * 2);
+}
 addEventListener('keydown', (e) => { if (e.key === 'h') document.querySelector('.hud').style.display = document.querySelector('.hud').style.display === 'none' ? '' : 'none'; });
 setInterval(() => { if (!tourOn && performance.now() - idleAt > 25000) { tourOn = true; tourT = 0; } }, 1000);
 // film: ?film → fixed 1600×900 layout, render(t) pure, driven by capture

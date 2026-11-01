@@ -12,6 +12,12 @@ export const P = {
   mass: 2.5, g: 9.81,                                                      // ASSUMED (Solo-12 ~2.5 kg)
   height: 0.24, stride: 0.10, lift: 0.05, freq: 1.6,                       // ASSUMED trot
 };
+// gaits (ASSUMED standard quadruped patterns): leg phase offsets FL, FR, HL, HR and stance duty
+export const GAITS = {
+  TROT: {off: [0, 0.5, 0.5, 0], duty: 0.5, freq: 1.6},
+  WALK: {off: [0, 0.5, 0.75, 0.25], duty: 0.75, freq: 1.0},
+  BOUND: {off: [0, 0, 0.5, 0.5], duty: 0.45, freq: 2.0},
+};
 export const KT_OUT = P.tauMax / P.iMax;              // 0.208 N·m/A at the output
 export const LEGS = [
   {id: 'FL', sx: 1, sy: 1, ph: 0}, {id: 'FR', sx: 1, sy: -1, ph: 0.5},
@@ -22,9 +28,9 @@ export const CHECK = {belt2mm: P.belt2T * P.pitch * 1000, ratio: (P.pulleyBigT /
 
 /** foot target in the hip frame (x fwd, z down) for leg phase u in 0..1: stance 0..0.5, swing 0.5..1 */
 function foot(u, gait) {
-  const s = gait.stride, h = gait.lift;
-  if (u < 0.5) { const k = u / 0.5; return {x: s / 2 - s * k, z: gait.height, stance: true}; }
-  const k = (u - 0.5) / 0.5;
+  const s = gait.stride, h = gait.lift, D = gait.duty ?? 0.5;
+  if (u < D) { const k = u / D; return {x: s / 2 - s * k, z: gait.height, stance: true}; }
+  const k = (u - D) / (1 - D);
   return {x: -s / 2 + s * (0.5 - 0.5 * Math.cos(Math.PI * k)), z: gait.height - h * Math.sin(Math.PI * k), stance: false};
 }
 /** planar 2-link IK, knee bent backward (Solo "X" or "<" stance): returns hfe, kfe */
@@ -40,12 +46,12 @@ function ik(x, z) {
 /** full state at time t (s) — pure function */
 export function state(t, gait = P) {
   const phase = (((t * gait.freq) % 1) + 1) % 1;
-  const nStance = 2;
-  const legs = LEGS.map((L) => {
-    const u = (phase + L.ph) % 1;
+  const nStance = Math.max(1, Math.round(4 * (gait.duty ?? 0.5)));
+  const legs = LEGS.map((L, li) => {
+    const u = (phase + (gait.off ? gait.off[li] : L.ph)) % 1;
     const f = foot(u, gait);
     const {hfe, kfe} = ik(f.x, f.z);
-    const haa = 0.04 * Math.sin(2 * Math.PI * (phase + L.ph)) * L.sy;          // ASSUMED small sway
+    const haa = 0.04 * Math.sin(2 * Math.PI * (phase + (gait.off ? gait.off[li] : L.ph))) * L.sy + (gait.side || 0) * L.sy * 0.25;          // ASSUMED small sway
     const w = 2 * Math.PI * gait.freq;
     // joint speeds by finite difference of the same model (still pure)
     const f2 = foot((u + 1e-3) % 1, gait), j2 = ik(f2.x, f2.z), dt = 1e-3 / gait.freq;

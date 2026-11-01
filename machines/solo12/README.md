@@ -31,3 +31,7 @@ Coordinator rulings:
 - 60 fps is kept even though rendering on the CPU is slow.
 - The procedural pulleys and belts stay, because they are what show the 9:1 motion.
 - The mesh fit is automatic: the longest axis of each part goes along the leg.
+
+## v3 (21:23): controls taken from visual-learning.app (the author's live site)
+- WASD/QE move, X stop, 1/2/3 switch gaits (TROT / WALK / BOUND, phase patterns ASSUMED), space pause, H hide panels, drag to orbit, AUTO ▶ resumes the tour
+- Coordinator fixes: ACTUATOR camera pulled back to the 60–70% fill rule; timeline clock corrected to 24 s; chart history no longer flatlines in the first second
