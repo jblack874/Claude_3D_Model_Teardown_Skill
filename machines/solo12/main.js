@@ -38,8 +38,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family
 #foot{position:fixed;bottom:8px;left:20px;right:20px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.2em;color:var(--mute)}
 canvas.ch{width:100%;height:110px;display:block}
 #log input{width:100%}
-.callout{position:absolute;font-size:9px;letter-spacing:.14em;font-weight:700;color:var(--ink);white-space:nowrap;transform:translate(10px,-50%)}
-.callout::before{content:'';position:absolute;left:-10px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--acc)}
+.callout{position:absolute;font-size:9px;letter-spacing:.14em;font-weight:700;color:var(--ink);white-space:nowrap;transform:translateY(-50%);background:rgba(243,240,234,.85);padding:1px 4px;border-radius:2px}
+#leaders{position:fixed;inset:0;pointer-events:none;width:100%;height:100%}
+#leaders line{stroke:#1d1d1f;stroke-width:.8;opacity:.55}#leaders circle{fill:#e8562a}
 `;
 document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
 document.body.insertAdjacentHTML('beforeend', `
@@ -71,7 +72,7 @@ document.body.insertAdjacentHTML('beforeend', `
   <div style="display:flex;gap:12px;align-items:center"><span class="btn on" id="play" style="margin:0">❚❚</span>
   <input type="range" id="scrub" min="0" max="1000" value="0"><span id="clock" style="font-size:11px;width:120px">0.0 S</span></div></div>
  <div id="mode"><div class="lab">OPERATING MODE</div><div class="m" id="modeT">TROTTING</div><div class="lab" id="modeS">GAIT PHASE 0.00</div></div>
- <div id="callouts"></div>
+ <svg id="leaders"></svg><div id="callouts"></div>
 </div>
 <div id="foot"><span>WASD QE MOVE · X STOP · 1 2 3 GAITS · SPACE PAUSE · H HIDE PANELS · DRAG ORBIT</span><span>FIELD SIMULATOR · PROCEDURAL MODEL · 4 LEGS · 12 ACTUATORS · 24 BELT STAGES</span><span>BUILT FROM ODRI OPEN HARDWARE (BSD-3) //////</span></div>`);
 
@@ -264,9 +265,9 @@ const meshesReady = (async () => {
 // ---------------------------------------------------------------- UI state
 const ui = {exploded: 0, explT: 0, xray: false, labels: true, turntable: false, playing: true, t: 0, iso: 'HERO'};
 const VIEWS = {
-  HERO: [[0.95, 0.55, 1.2], [0, 0.13, 0]], SIDE: [[0, 0.22, 1.05], [0, 0.15, 0]],
+  HERO: [[0.95, 0.55, 1.2], [0, 0.13, 0]], SIDE: [[0.05, 0.26, 1.7], [0, 0.14, 0]],
   TOP: [[0.25, 1.75, 0.35], [0, 0.12, 0]], ACTUATOR: [[0.78, 0.36, 0.92], [P.hipX * 0.6, 0.14, P.hipY]],
-  BODY: [[0.4, 0.55, 0.35], [0, 0.24, 0]],
+  BODY: [[1.05, 1.35, 0.95], [0, 0.17, 0]],
 };
 let camFrom = null, camTo = null, camK = 1;
 function view(name) {
@@ -390,11 +391,20 @@ function panels(S) {
   scrub.value = ((S.t % LOOP) / LOOP) * 1000;
 }
 function callouts() {
-  const r = canvas.getBoundingClientRect();
-  [...callEl.children].forEach((el, i) => {
-    CALL[i][1]().getWorldPosition(v3); v3.project(cam);
-    el.style.left = `${((v3.x + 1) / 2) * r.width}px`; el.style.top = `${((1 - v3.y) / 2) * r.height}px`; el.style.fontSize = `${9 * Z}px`;
+  const r = canvas.getBoundingClientRect(), svg = document.getElementById('leaders');
+  const pts = CALL.map((c, i) => { c[1]().getWorldPosition(v3); v3.project(cam); return {i, x: ((v3.x + 1) / 2) * r.width, y: ((1 - v3.y) / 2) * r.height, vis: v3.z < 1}; });
+  // labels sit 70 px right of their part, stacked so no two are closer than 18 px (scaled)
+  const gap = 18 * Z, dx = 70 * Z;
+  const lab = pts.map((p) => ({...p, ly: p.y - 24 * Z})).sort((a, b) => a.ly - b.ly);
+  for (let k = 1; k < lab.length; k++) if (lab[k].ly - lab[k - 1].ly < gap) lab[k].ly = lab[k - 1].ly + gap;
+  let html = '';
+  lab.forEach((p) => {
+    const el = callEl.children[p.i];
+    el.style.display = p.vis && ui.labels ? '' : 'none';
+    el.style.left = `${p.x + dx}px`; el.style.top = `${p.ly}px`; el.style.fontSize = `${9 * Z}px`;
+    if (p.vis && ui.labels) html += `<line x1="${p.x}" y1="${p.y}" x2="${p.x + dx - 4}" y2="${p.ly}"/><circle cx="${p.x}" cy="${p.y}" r="${3 * Z}"/>`;
   });
+  svg.innerHTML = html;
 }
 let Z = 1;
 function resize() {
@@ -408,13 +418,13 @@ addEventListener('resize', resize); resize();
 let last = performance.now();
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const rdt = Math.min(0.25, (now - last) / 1000), dt = Math.min(0.05, rdt); last = now;
   if (FILM) return; // capture drives frames
   if (tourOn) { tourT += dt; renderAt(tourT); requestAnimationFrame(frame); return; }
   steer(dt);
   if (ui.playing) ui.t += dt;
-  ui.exploded += (ui.explT - ui.exploded) * Math.min(1, dt * 4);
-  if (camK < 1) { camK = Math.min(1, camK + dt / 1.2); const k = ease(camK); cam.position.lerpVectors(camFrom[0], camTo[0], k); ctl.target.lerpVectors(camFrom[1], camTo[1], k); }
+  ui.exploded += (ui.explT - ui.exploded) * Math.min(1, rdt * 4);
+  if (camK < 1) { camK = Math.min(1, camK + rdt / 1.2); const k = ease(camK); cam.position.lerpVectors(camFrom[0], camTo[0], k); ctl.target.lerpVectors(camFrom[1], camTo[1], k); }
   if (ui.turntable) robot.rotation.y += dt * 0.3;
   const S = state(ui.t);
   pose(S, ui.exploded);
@@ -497,5 +507,5 @@ const FILM = new URLSearchParams(location.search).has('film');
 function renderAt(t) { applyScript(t); pose(state(t), ui.exploded); ctl.update(); renderer.render(scene, cam); panels(state(t)); callouts(); }
 window.__film = {renderAt, DUR, SCRIPT};
 // expose for headless stills
-window.__solo = {ui, view, act, setT: (t) => (ui.t = t), takeover};
+window.__solo = {ui, view, act, setT: (t) => (ui.t = t), takeover, settle: () => { idleAt = performance.now(); if (camTo) { cam.position.copy(camTo[0]); ctl.target.copy(camTo[1]); camK = 1; } ui.exploded = ui.explT; }};
 requestAnimationFrame(frame);

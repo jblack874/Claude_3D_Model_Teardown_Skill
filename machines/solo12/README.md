@@ -40,3 +40,10 @@ Coordinator rulings:
 - Joe's laptop test (2862×1632 screen): the robot shrank and walked out of frame, and the HUD was tiny. **Fixed.** Driving now uses a treadmill (the robot stays centred while the floor scrolls), and the HUD scales with the window.
 - Film is final: `film/solo12.mp4` is v2 (24 s, 1920×1080, 60 fps, AAC score). The camera now moves on a sphere around the robot, so it never passes through it. Beat stills are in `film/beats/`, the contact sheet is `film/beats-sheet.png`.
 - Meshes **kept**. The page is 1.2 MB, which fails the 1 MB link-preview rule but is fine on the claude.ai artifact host. Drop `meshes.js` only if the page has to unfurl as an X link card.
+
+## v6 bug cleanup (2026-11-01)
+Swept every view and mode with `scripts/solo12_sweep.mjs` (stills in `stills/`; no console errors, no NaN on any panel).
+- Callouts: each label now sits beside its part with a thin leader line, and labels are stacked so they never overlap. Before this, MOTOR / STAGE 1 collided and FOOT CONTACT covered the foot.
+- Camera moves and the explode animation run on real time, so they no longer crawl on a slow GPU.
+- SIDE and BODY views pulled back so the robot stays clear of the side panels.
+- Test hook `__solo.settle()` added so automated sweeps capture finished transitions.
