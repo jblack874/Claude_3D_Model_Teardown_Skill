@@ -35,3 +35,8 @@ Coordinator rulings:
 ## v3 (21:23): controls taken from visual-learning.app (the author's live site)
 - WASD/QE move, X stop, 1/2/3 switch gaits (TROT / WALK / BOUND, phase patterns ASSUMED), space pause, H hide panels, drag to orbit, AUTO ▶ resumes the tour
 - Coordinator fixes: ACTUATOR camera pulled back to the 60–70% fill rule; timeline clock corrected to 24 s; chart history no longer flatlines in the first second
+
+## v5 close-out (21:53)
+- Joe's laptop test (2862×1632 screen): the robot shrank and walked out of frame, and the HUD was tiny. **Fixed.** Driving now uses a treadmill (the robot stays centred while the floor scrolls), and the HUD scales with the window.
+- Film is final: `film/solo12.mp4` is v2 (24 s, 1920×1080, 60 fps, AAC score). The camera now moves on a sphere around the robot, so it never passes through it. Beat stills are in `film/beats/`, the contact sheet is `film/beats-sheet.png`.
+- Meshes **kept**. The page is 1.2 MB, which fails the 1 MB link-preview rule but is fine on the claude.ai artifact host. Drop `meshes.js` only if the page has to unfurl as an X link card.

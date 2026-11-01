@@ -393,11 +393,14 @@ function callouts() {
   const r = canvas.getBoundingClientRect();
   [...callEl.children].forEach((el, i) => {
     CALL[i][1]().getWorldPosition(v3); v3.project(cam);
-    el.style.left = `${((v3.x + 1) / 2) * r.width}px`; el.style.top = `${((1 - v3.y) / 2) * r.height}px`;
+    el.style.left = `${((v3.x + 1) / 2) * r.width}px`; el.style.top = `${((1 - v3.y) / 2) * r.height}px`; el.style.fontSize = `${9 * Z}px`;
   });
 }
+let Z = 1;
 function resize() {
   const w = innerWidth, h = innerHeight;
+  Z = Math.min(w / 1600, h / 900);
+  document.querySelectorAll('.hud > .card, #brand, #title, #mode, #foot').forEach((el) => (el.style.zoom = Z));
   renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
@@ -483,8 +486,9 @@ function steer(dt) {
   const sp = GAITS[drive.gait].freq * P.stride * drive.v;
   drive.x += Math.cos(drive.heading) * sp * dt; drive.z -= Math.sin(drive.heading) * sp * dt;
   drive.x -= Math.sin(drive.heading) * drive.side * 0.05 * dt; drive.z -= Math.cos(drive.heading) * drive.side * 0.05 * dt;
-  robot.position.set(drive.x, 0, drive.z); robot.rotation.y = drive.heading;
-  ctl.target.x += (drive.x - ctl.target.x) * Math.min(1, dt * 2); ctl.target.z += (drive.z - ctl.target.z) * Math.min(1, dt * 2);
+  // treadmill: the robot stays in frame, the floor rings scroll under it
+  robot.rotation.y = drive.heading;
+  grid.position.set(-(drive.x % 0.55), 0.0005, -(drive.z % 0.55));
 }
 addEventListener('keydown', (e) => { if (e.key === 'h') document.querySelector('.hud').style.display = document.querySelector('.hud').style.display === 'none' ? '' : 'none'; });
 setInterval(() => { if (!tourOn && performance.now() - idleAt > 25000) { tourOn = true; tourT = 0; } }, 1000);
