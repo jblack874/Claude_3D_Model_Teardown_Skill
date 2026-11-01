@@ -265,7 +265,7 @@ const meshesReady = (async () => {
 const ui = {exploded: 0, explT: 0, xray: false, labels: true, turntable: false, playing: true, t: 0, iso: 'HERO'};
 const VIEWS = {
   HERO: [[0.95, 0.55, 1.2], [0, 0.13, 0]], SIDE: [[0, 0.22, 1.05], [0, 0.15, 0]],
-  TOP: [[0.001, 1.1, 0.001], [0, 0.1, 0]], ACTUATOR: [[0.78, 0.36, 0.92], [P.hipX * 0.6, 0.14, P.hipY]],
+  TOP: [[0.25, 1.75, 0.35], [0, 0.12, 0]], ACTUATOR: [[0.78, 0.36, 0.92], [P.hipX * 0.6, 0.14, P.hipY]],
   BODY: [[0.4, 0.55, 0.35], [0, 0.24, 0]],
 };
 let camFrom = null, camTo = null, camK = 1;
@@ -359,15 +359,15 @@ function pose(S, e) {
     // exploded: housing out, drivetrain layers spread on the module's own z
     for (const m of [g.upper, g.haa]) {
       const d = m.userData, sd = g.L.sy;
-      d.housing.position.z = 0.07 * e * sd;
+      d.housing.position.z = 0.045 * e * sd;
       d.motor.position.z = (-0.008 - 0.05 * e) * sd;
       d.enc.position.z = (-0.018 - 0.085 * e) * sd;
       d.p1.position.z = d.p2.position.z = d.b1.position.z = (0.008 + 0.025 * e) * sd;
       d.p3.position.z = d.p4.position.z = d.b2.position.z = (0.0015 + 0.0 * e) * sd;
       d.bearing.position.z = (-0.009 - 0.03 * e) * sd;
-      if (d.shellB) { d.shellB.position.z = (-0.008 - 0.05 * e) * sd * (m === g.haa ? 1 / 0.62 : 1); d.shellC.position.z = (0.016 + 0.075 * e) * sd * (m === g.haa ? 1.9 : 1); }
+      if (d.shellB) { d.shellB.position.z = (-0.008 - 0.035 * e) * sd * (m === g.haa ? 1.2 : 1); d.shellC.position.z = (0.016 + 0.05 * e) * sd * (m === g.haa ? 1.3 : 1); }
     }
-    g.knee.position.y = -P.upper - 0.05 * e;
+    g.knee.position.y = -P.upper - 0.03 * e;
   });
   M.white.opacity = ui.xray ? 0.18 : 1;
   M.white.depthWrite = !ui.xray;
@@ -443,8 +443,14 @@ function applyScript(t) {
   const k = sm(Math.min(1, (t - cur[0]) / 1.4));
   const [pa, ta] = VIEWS[prev[2]], [pb, tb] = VIEWS[cur[2]];
   const orbit = 0.12 * Math.sin((t / DUR) * Math.PI * 2);
-  const P0 = new THREE.Vector3(...pa).lerp(new THREE.Vector3(...pb), i ? k : 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit);
-  cam.position.copy(P0); ctl.target.copy(new THREE.Vector3(...ta).lerp(new THREE.Vector3(...tb), i ? k : 1));
+  // camera moves on a sphere around the target (never through the robot): lerp radius/azimuth/elevation, not xyz
+  const kk = i ? k : 1;
+  const TA = new THREE.Vector3(...ta), TB = new THREE.Vector3(...tb), T = TA.clone().lerp(TB, kk);
+  const sa = new THREE.Spherical().setFromVector3(new THREE.Vector3(...pa).sub(TA));
+  const sb = new THREE.Spherical().setFromVector3(new THREE.Vector3(...pb).sub(TB));
+  let dth = sb.theta - sa.theta; if (dth > Math.PI) dth -= 2 * Math.PI; if (dth < -Math.PI) dth += 2 * Math.PI;
+  const sp = new THREE.Spherical(Math.max(0.95, sa.radius + (sb.radius - sa.radius) * kk), Math.min(sa.phi + (sb.phi - sa.phi) * kk, 1.45), sa.theta + dth * kk + orbit);
+  cam.position.setFromSpherical(sp).add(T); ctl.target.copy(T);
   ui.exploded = prev[3] + (cur[3] - prev[3]) * (i ? k : 1);
   ui.explT = cur[3]; ui.xray = !!cur[4]; ui.iso = cur[2]; ui.labels = true; ui.t = t;
   // cursor walks to the next button and presses it 0.35 s before its beat
