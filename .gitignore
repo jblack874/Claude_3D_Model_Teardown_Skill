@@ -1,9 +1,10 @@
 *.key
-*.mp4
 *.pem
 .env
 .venv/
 __pycache__/
 node_modules/
-refs/
 teardown-out/
+*-silent.mp4
+machines/solo12/film/beats_v2/
+machines/solo12/film/solo12-v2*

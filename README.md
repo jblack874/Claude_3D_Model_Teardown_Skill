@@ -2,15 +2,18 @@
 
 Joe's project for turning a real robot into an interactive 3D simulator, using the open-source **teardown** Claude skill. The simulator should open up into exploded views and show live gauges.
 
-**Status:** Steps 1–4 are done. Round 1 (the Solo-12 quadruped and the PAROL6 arm) was rejected. Round 2 options are waiting on a pick: **A2**, the NASA JPL Open Source Rover, or **B2**, the Berkeley Humanoid Lite leg.
+**Status:** Building the ODRI Solo-12 quadruped (option A1). v4 adds the live page, auto-tour, drive controls and a 60 fps scored film.
 
 ## What's in here
 | Path | What it is |
 |---|---|
+| `machines/solo12/` | **The build.** `dist/solo12.html` is the offline page: download it and double-click to open. `film/solo12.mp4` is the 24 s film at 60 fps with sound. `kin.js` + `main.js` are the source; see its README for controls and the quality criteria |
+| `refs/odri/` | The ODRI actuator spec and licence that the drivetrain numbers come from |
 | `HANDOFF.md` | The full method: how the files were read, the commands run, the agent prompts, the criteria, the number checks against the sources, and the 10-minute build plan. **Start here when resuming.** |
 | `PROJECT.md` | The gap log, the vetting criteria and the specs for both options |
 | `viz/` | One visual board per option, opened as PNG images |
 | `skill/teardown/` | Unmodified copy of the teardown skill (MIT, credit kept). `VENDORED.md` has setup steps |
+| `scripts/` | Board builders, the mesh packer (`pack_meshes.py`) and film capture (`solo12_film.mjs`) |
 | `scripts/option_boards.py` | Builds the boards from the robots' source images and PAROL6's forward kinematics (its published DH table) |
 
 ## How to open
