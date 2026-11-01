@@ -1,0 +1,3 @@
+{"duration": 24, "fps": 60, "beats": [0.0, 4.0, 8.0, 12.5, 17.0, 20.0],
+ "labels": ["HERO trot", "SIDE gait", "X-RAY belt drive", "EXPLODED actuator", "TOP exploded", "HERO reassembled"],
+ "gait_hz": 1.6, "legs_phase": {"FL": 0, "FR": 0.5, "HL": 0.5, "HR": 0}}

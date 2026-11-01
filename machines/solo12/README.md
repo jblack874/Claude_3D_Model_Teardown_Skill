@@ -12,3 +12,22 @@
 2. The belt loops are drawn as thin tubes with no teeth.
 3. The film/tour (an auto cursor following the render(t) contract) is not built yet.
 4. Fps has only been tested on a software renderer. It still needs a test on a laptop's integrated GPU.
+
+## v2 (2026-10-31, 21:06 brief): real meshes, auto-tour, film
+Quality criteria set by the coordinator. They are taken from the teardown article's 9 prompts and the example screenshots, because X blocked automated reading of the post itself:
+
+| # | Criterion (source) | Check | Status |
+|---|---|---|---|
+| Q1 | One input drives everything; nothing is hand-keyed (Step 3) | Gait phase poses the joints, pulleys, gauges, charts and score | PASS |
+| Q2 | Console (Step 4): big live number at top left, charts that move with the machine, a button per assembly, camera views, callouts | Knee torque/rpm, torque chart, foot-height chart, 5 views, 4 display modes, 5 callouts | PASS (the callouts are dot markers, not leader lines) |
+| Q3 | Look (Step 5): pale studio, one accent for the working part, machine fills 60–70% of the view, ink outline on near-white parts | Stills read at each beat | PASS |
+| Q4 | Critic (Step 6): a still at every beat; nothing passes through another part; labels never cover what they name | Beat stills in `film/beats/` | PARTIAL: two callouts sit close together at the HERO angle |
+| Q5 | Page you drive (Step 7): cursor tour; any click, drag, scroll or key hands over; 25 s idle returns the tour; orbit and zoom; a key hides the panels | Implemented; `H` hides the HUD | PASS (no integrated-GPU test yet) |
+| Q6 | Film (Step 8): render(t) is pure; 60 fps, 1920×1080, H.264 yuv420p faststart; score on the same timeline | `scripts/solo12_film.mjs`, `film/score.py`, `film/timeline.json` | PASS (the 1080p frame is rendered at 1600×900 and upscaled) |
+| Q7 | Publish (Step 9): page under 1 MB | 1.22 MB, because of the real ODRI meshes | ACCEPTED trade-off; hosted as a claude.ai artifact |
+
+Coordinator rulings:
+- Real meshes are worth the extra 0.2 MB.
+- 60 fps is kept even though rendering on the CPU is slow.
+- The procedural pulleys and belts stay, because they are what show the 9:1 motion.
+- The mesh fit is automatic: the longest axis of each part goes along the leg.

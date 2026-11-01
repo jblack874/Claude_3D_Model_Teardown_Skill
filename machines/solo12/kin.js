@@ -39,7 +39,7 @@ function ik(x, z) {
 }
 /** full state at time t (s) — pure function */
 export function state(t, gait = P) {
-  const phase = (t * gait.freq) % 1;
+  const phase = (((t * gait.freq) % 1) + 1) % 1;
   const nStance = 2;
   const legs = LEGS.map((L) => {
     const u = (phase + L.ph) % 1;

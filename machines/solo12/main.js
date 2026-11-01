@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {P, LEGS, CHECK, state} from './kin.js';
+import {MESH, MESH_META} from './meshes.js';
 
 console.log(`hand check: belt2 = ${CHECK.belt2mm} mm (spec 201), ratio = ${CHECK.ratio}:1 (spec 9)`);
 
@@ -217,6 +218,45 @@ const legs = LEGS.map((L) => {
   return {L, hip, haa, roll, hfeG, upper, knee, footM};
 });
 
+// ---------------------------------------------------------------- real ODRI shells (STL → int16 → gzip)
+async function decode(name) {
+  const meta = MESH_META[name];
+  const bin = Uint8Array.from(atob(MESH[name]), (c) => c.charCodeAt(0));
+  const buf = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  const q = new Int16Array(buf, 0, meta.n * 3);
+  const pos = new Float32Array(meta.n * 3);
+  for (let i = 0; i < pos.length; i++) pos[i] = q[i] * meta.s;
+  const idxBytes = buf.slice(meta.n * 6);
+  const idx = meta.n < 65535 ? new Uint16Array(idxBytes) : new Uint32Array(idxBytes);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+  return g;
+}
+const shellMesh = (g, mat) => { const m = new THREE.Mesh(g, mat); m.castShadow = m.receiveShadow = true; m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 35), M.ink)); return m; };
+const meshesReady = (async () => {
+  const G = {};
+  for (const k of Object.keys(MESH)) G[k] = await decode(k);
+  legs.forEach((g) => {
+    const sd = g.L.sy, d = g.upper.userData;
+    d.housing.visible = false;
+    d.shellB = shellMesh(G.upper_base, M.white); d.shellB.position.set(0, -P.upper / 2, -0.008 * sd);
+    d.shellC = shellMesh(G.upper_cover, M.white); d.shellC.position.set(0, -P.upper / 2, 0.016 * sd);
+    if (sd < 0) { d.shellB.rotation.y = Math.PI; d.shellC.rotation.y = Math.PI; }
+    g.upper.add(d.shellB, d.shellC);
+    const shin = g.knee.children[0]; shin.visible = false;
+    const ll = shellMesh(G.lower_leg, M.white); ll.position.y = -P.lower / 2 - 0.006; g.knee.add(ll);
+    const h = g.haa.userData; h.housing.visible = false;
+    h.shellB = shellMesh(G.hipfe_base, M.white); h.shellB.scale.setScalar(1 / 0.62); h.shellB.position.set(0, -0.11, -0.012 * sd);
+    h.shellC = shellMesh(G.hipfe_cover, M.white); h.shellC.scale.setScalar(1 / 0.62); h.shellC.position.set(0, -0.11, 0.03 * sd);
+    g.haa.add(h.shellB, h.shellC);
+  });
+  const top = shellMesh(G.body_center, M.white); top.rotation.set(Math.PI / 2, 0, Math.PI / 2); top.position.y = P.bodyH / 2 + 0.008; body.add(top);
+  lid.visible = false;
+  window.__ready = true;
+})();
+
 // ---------------------------------------------------------------- UI state
 const ui = {exploded: 0, explT: 0, xray: false, labels: true, turntable: false, playing: true, t: 0, iso: 'HERO'};
 const VIEWS = {
@@ -317,6 +357,7 @@ function pose(S, e) {
       d.p1.position.z = d.p2.position.z = d.b1.position.z = (0.008 + 0.025 * e) * sd;
       d.p3.position.z = d.p4.position.z = d.b2.position.z = (0.0015 + 0.0 * e) * sd;
       d.bearing.position.z = (-0.009 - 0.03 * e) * sd;
+      if (d.shellB) { d.shellB.position.z = (-0.008 - 0.05 * e) * sd * (m === g.haa ? 1 / 0.62 : 1); d.shellC.position.z = (0.016 + 0.075 * e) * sd * (m === g.haa ? 1.9 : 1); }
     }
     g.knee.position.y = -P.upper - 0.05 * e;
   });
@@ -332,7 +373,7 @@ function panels(S) {
   document.getElementById('cur').textContent = `${fl.iK.toFixed(2)} A`;
   document.getElementById('jt').innerHTML = S.legs.map((l) => `<div class="row"><span class="lab">${l.id}</span><span>${(l.haa * 57.3).toFixed(0).padStart(4)}°</span><span>${(l.hfe * 57.3).toFixed(0).padStart(4)}°</span><span>${(l.kfe * 57.3).toFixed(0).padStart(5)}°</span><span class="tag ${l.stance ? '' : 's'}">${l.stance ? 'STANCE' : 'SWING'}</span></div>`).join('');
   // charts are pure functions of time: sample the model backward
-  const N = 90, hist = (f) => Array.from({length: N}, (_, i) => f(state(S.t - (N - 1 - i) * 0.012)));
+  const N = (new URLSearchParams(location.search).has('film') ? 40 : 90), hist = (f) => Array.from({length: N}, (_, i) => f(state(S.t - (N - 1 - i) * (1.08 / N))));
   chart('ch1', [hist((s) => Math.abs(s.legs[0].tauK)), hist((s) => Math.abs(s.legs[0].tauH))], ['#e8562a', '#9a958c'], 0, 2.5);
   chart('ch2', [0, 1, 2, 3].map((k) => hist((s) => s.legs[k].footLift)), ['#e8562a', '#1d1d1f', '#9a958c', '#c9c2b6'], -0.005, P.lift * 1.15);
   document.getElementById('modeT').textContent = ui.explT ? 'EXPLODED' : ui.xray ? 'X-RAY · DRIVETRAIN' : 'TROTTING';
@@ -357,6 +398,8 @@ let last = performance.now();
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (FILM) return; // capture drives frames
+  if (tourOn) { tourT += dt; renderAt(tourT); requestAnimationFrame(frame); return; }
   if (ui.playing) ui.t += dt;
   ui.exploded += (ui.explT - ui.exploded) * Math.min(1, dt * 4);
   if (camK < 1) { camK = Math.min(1, camK + dt / 1.2); const k = ease(camK); cam.position.lerpVectors(camFrom[0], camTo[0], k); ctl.target.lerpVectors(camFrom[1], camTo[1], k); }
@@ -368,6 +411,51 @@ function frame(now) {
   panels(S); callouts();
   requestAnimationFrame(frame);
 }
+// ---------------------------------------------------------------- SCRIPT (tour + film share it)
+export const SCRIPT = [ // [t, button key, camera view, exploded, xray, caption]
+  [0.0, 'HERO', 'HERO', 0, 0, 'TROTTING · 1.6 HZ'],
+  [4.0, 'SIDE', 'SIDE', 0, 0, 'GAIT · STANCE / SWING'],
+  [8.0, 'xray', 'ACTUATOR', 0, 1, 'X-RAY · 9:1 BELT DRIVE'],
+  [12.5, 'exploded', 'ACTUATOR', 1, 1, 'EXPLODED · ACTUATOR MODULE'],
+  [17.0, 'TOP', 'TOP', 1, 0, 'EXPLODED · 12 MODULES'],
+  [20.0, 'HERO', 'HERO', 0, 0, 'REASSEMBLED · TROTTING'],
+];
+export const DUR = 24;
+const cursor = document.createElement('div');
+cursor.style.cssText = 'position:fixed;width:18px;height:18px;border-radius:50%;border:2px solid #1d1d1f;background:rgba(232,86,42,.25);pointer-events:none;z-index:9;transform:translate(-50%,-50%);display:none';
+document.body.appendChild(cursor);
+const btnPos = (k) => { const b = document.querySelector(`.btn[data-k="${k}"]`); if (!b) return [innerWidth / 2, innerHeight / 2]; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+const sm = (k) => k * k * (3 - 2 * k);
+/** pure: everything on screen at script time t */
+function applyScript(t) {
+  t = ((t % DUR) + DUR) % DUR;
+  let i = 0; while (i + 1 < SCRIPT.length && SCRIPT[i + 1][0] <= t) i++;
+  const cur = SCRIPT[i], prev = SCRIPT[Math.max(0, i - 1)];
+  const k = sm(Math.min(1, (t - cur[0]) / 1.4));
+  const [pa, ta] = VIEWS[prev[2]], [pb, tb] = VIEWS[cur[2]];
+  const orbit = 0.12 * Math.sin((t / DUR) * Math.PI * 2);
+  const P0 = new THREE.Vector3(...pa).lerp(new THREE.Vector3(...pb), i ? k : 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit);
+  cam.position.copy(P0); ctl.target.copy(new THREE.Vector3(...ta).lerp(new THREE.Vector3(...tb), i ? k : 1));
+  ui.exploded = prev[3] + (cur[3] - prev[3]) * (i ? k : 1);
+  ui.explT = cur[3]; ui.xray = !!cur[4]; ui.iso = cur[2]; ui.labels = true; ui.t = t;
+  // cursor walks to the next button and presses it 0.35 s before its beat
+  const nxt = SCRIPT[(i + 1) % SCRIPT.length], tn = i + 1 < SCRIPT.length ? nxt[0] : DUR;
+  const a = btnPos(cur[1]), b = btnPos(nxt[1]), w = sm(Math.max(0, Math.min(1, (t - (tn - 1.6)) / 1.25)));
+  cursor.style.display = 'block'; cursor.style.left = `${a[0] + (b[0] - a[0]) * w}px`; cursor.style.top = `${a[1] + (b[1] - a[1]) * w}px`;
+  const press = t - cur[0] < 0.3; cursor.style.transform = `translate(-50%,-50%) scale(${press ? 0.7 : 1})`;
+  document.getElementById('modeS').textContent = cur[5];
+  sync();
+}
+// tour: idle → script plays; any input → visitor; 25 s quiet → tour returns
+let tourOn = true, idleAt = 0, tourT = 0;
+const takeover = () => { tourOn = false; idleAt = performance.now(); cursor.style.display = 'none'; camK = 1; };
+['pointerdown', 'wheel', 'keydown'].forEach((ev) => addEventListener(ev, (e) => { if (e.isTrusted) takeover(); }, {capture: true}));
+addEventListener('keydown', (e) => { if (e.key === 'h') document.querySelector('.hud').style.display = document.querySelector('.hud').style.display === 'none' ? '' : 'none'; });
+setInterval(() => { if (!tourOn && performance.now() - idleAt > 25000) { tourOn = true; tourT = 0; } }, 1000);
+// film: ?film → fixed 1600×900 layout, render(t) pure, driven by capture
+const FILM = new URLSearchParams(location.search).has('film');
+function renderAt(t) { applyScript(t); pose(state(t), ui.exploded); ctl.update(); renderer.render(scene, cam); panels(state(t)); callouts(); }
+window.__film = {renderAt, DUR, SCRIPT};
 // expose for headless stills
-window.__solo = {ui, view, act, setT: (t) => (ui.t = t)};
+window.__solo = {ui, view, act, setT: (t) => (ui.t = t), takeover};
 requestAnimationFrame(frame);
