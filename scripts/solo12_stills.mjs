@@ -1,0 +1,13 @@
+import {createRequire} from 'node:module';
+const require = createRequire('/home/claude/claude_3d_model_teardown_skill/skill/teardown/x.js');
+const {chromium} = require('playwright');
+const [,, html, out] = process.argv;
+const b = await chromium.launch({executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--ignore-gpu-blocklist','--enable-webgl']});
+const p = await b.newPage({viewport: {width: 1600, height: 900}});
+const errs=[]; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => console.log('console:', m.text()));
+await p.goto('file://' + html); await p.waitForTimeout(2500);
+await p.evaluate(() => window.__solo.setT(3.3));
+await p.waitForTimeout(1800); await p.screenshot({path: out + '-hero.png'});
+await p.evaluate(() => { window.__solo.act('exploded'); window.__solo.view('ACTUATOR'); });
+await p.waitForTimeout(2500); await p.screenshot({path: out + '-act.png'});
+console.log('errors:', errs.join(' | ') || 'none'); await b.close();
